@@ -136,6 +136,13 @@
 - 已修复 `output_formate` 拼写错误。
 - 已修复 `plot_feature_importance()` 参数传递错误。
 - 已修复 `DataPreprocessor` 类名遮蔽问题。
+- 已修复 epoch 统计传参和验证历史记录缺失问题。
+- 已将训练与验证阶段的 `y_pred` / `y_true` 从单个 batch 改为整轮聚合数组。
+- 已将通用能力拆分到 `ann_project.core`、`ann_project.data`、`ann_project.training`，让 `bp_network.py` 主要保留 ANN 模型主体。
+- 已让 `train_model()` 显式接收 dataloader、device、epochs、learning_rate、weight_decay 和 print_interval。
+- 已为 `DeviceManager` 增加 `mps / cuda / cpu` 的统一设备分支。
+- 已让 `DataPreprocessor.create_dataloaders()` 正常使用传入的 `shuffle` 参数。
+- 已把模型保存信息扩展为 `model_module`、`model_class`、`model_config`，为后续 CNN 复用加载逻辑做准备。
 - 已梳理出一套可分阶段处理的修改路线，适合后续逐项修复。
 - 已建立可长期追踪的归档文件与最新上下文指针文件。
 - 已完成第一轮小修复后的静态语法校验，`training_timer.py` 与 `bp_network.py` 当前均可通过 `python3 -m py_compile`。
@@ -143,12 +150,8 @@
 ### ⏳ 待办/未完成
 
 - [ ] 第一轮最小修复：继续确认项目达到“可正常导入、可基本训练”的状态。
-- [ ] 修复 epoch 统计传参和验证历史记录缺失问题。
-- [ ] 将每个 epoch 的预测/真值改为整轮累积而不是仅最后一个 batch。
-- [ ] 改造 `train_model()`，移除对全局变量的依赖。
-- [ ] 为 Apple Silicon 增加 `mps` 设备支持。
 - [ ] 清理未使用导入和 `import *`。
-- [ ] 视修复进展决定是否进入模块拆分重构。
+- [ ] 在安装 `torch` 的环境下补充运行级导入验证。
 
 ## 推荐修改顺序
 
@@ -162,22 +165,22 @@
 
 ### 第二阶段：让统计可信
 
-- [ ] 将 `end_epoch(self.epochs)` 改为传入当前 epoch。
-- [ ] 将 `get_statistics(epochs, split="val")` 改为当前 epoch。
-- [ ] 给 `val_total_history` 正确追加验证结果。
-- [ ] 将 `y_pred` / `y_true` 改为整轮聚合。
+- [x] 将 `end_epoch(self.epochs)` 改为传入当前 epoch。
+- [x] 将 `get_statistics(epochs, split="val")` 改为当前 epoch。
+- [x] 给 `val_total_history` 正确追加验证结果。
+- [x] 将 `y_pred` / `y_true` 改为整轮聚合。
 
 ### 第三阶段：让接口更稳
 
 - [ ] 按 `task_type` 选择损失函数，而不是固定 `SmoothL1Loss`。
-- [ ] 让 `create_dataloaders()` 接口行为与参数一致。
-- [ ] 让 `train_model()` 显式接收 `device` 和 dataloader。
-- [ ] 增加 `mps / cuda / cpu` 的统一设备分支。
+- [x] 让 `create_dataloaders()` 接口行为与参数一致。
+- [x] 让 `train_model()` 显式接收 `device` 和 dataloader。
+- [x] 增加 `mps / cuda / cpu` 的统一设备分支。
 
 ### 第四阶段：再做结构优化
 
-- [ ] 拆分 `bp_network.py` 的职责。
-- [ ] 评估是否将模型定义、训练器、数据预处理、设备管理和模型 IO 分离为独立模块。
+- [x] 拆分 `bp_network.py` 的职责。
+- [x] 评估是否将模型定义、训练器、数据预处理、设备管理和模型 IO 分离为独立模块。
 - [ ] 评估可视化/分析模块的状态存储方式，减少跨实例污染风险。
 
 ## 用户关键决策
