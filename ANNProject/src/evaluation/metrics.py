@@ -32,56 +32,108 @@ from .config import EvaluationConfig
 
 
 class RegressionMetrics:
-    """Compute regression metrics from arrays."""
+    """回归指标计算器：汇总模型的误差、偏置分析和预测区间。
+
+    用法:
+        config = EvaluationConfig(confidence_level=0.95)
+        rm = RegressionMetrics(config)
+        stats = rm.compute(y_true, y_pred, mode="val", epoch=10)
+
+    返回的字典包含三个层次:
+        - 核心误差: MSE, RMSE, MAE, R², explained_variance
+        - 偏置分析: 残差均值、t 检验、置信区间
+        - 预测区间: prediction_interval_width
+    """
 
     def __init__(self, config: EvaluationConfig):
         self.config = config
+        # 根据置信水平计算 z 分数（用于置信区间）
+        # 例: confidence_level=0.95 → z_score≈1.96
         self.z_score = stats.norm.ppf((1 + config.confidence_level) / 2)
 
     def compute(self, y_true: np.ndarray, y_pred: np.ndarray, mode: str = "train", epoch: int = 0) -> Dict[str, object]:
+        # ── 输入标准化：确保一维数组 ──
         y_true = np.asarray(y_true).reshape(-1)
         y_pred = np.asarray(y_pred).reshape(-1)
 
+        # ── 残差与核心误差指标 ──
+        # residuals = 真实值 - 预测值，正值表示低估、负值表示高估
         residuals = y_true - y_pred
+
+        # MSE: 均方误差，对较大误差有更高的惩罚权重
         mse = mean_squared_error(y_true, y_pred)
+        # RMSE: 均方根误差，单位与原始目标值一致
         rmse = float(np.sqrt(mse))
+        # MAE: 平均绝对误差，对所有误差赋予相同权重
         mae = float(mean_absolute_error(y_true, y_pred))
+        # R²: 决定系数，衡量模型解释的方差比例（1.0=完美，≤0=比均值还差）
         r2 = float(r2_score(y_true, y_pred))
+        # 解释方差: 模型捕捉到的目标方差比例，与 R² 相近但不完全相同
         explained_variance = float(explained_variance_score(y_true, y_pred))
 
+        # ── 偏置分析（基于残差的分布特征） ──
         n_samples = len(residuals)
+        # 残差均值：若显著非零，说明模型存在系统性偏置（bias）
         residual_mean = float(np.mean(residuals))
-        # 样本标准差，ddof=1 用贝塞尔校正获得无偏估计
+        # 样本标准差（ddof=1 贝塞尔校正），用于推断总体标准差
         residual_std = float(np.std(residuals, ddof=1)) if n_samples > 1 else 0.0
-        # 残差均值的标准误（Standard Error of the Mean Residual），
-        # 描述 residual_mean 作为真实偏置估计的不确定性
+        # 残差均值的标准误（Standard Error of the Mean, SEM）：
+        # 描述 residual_mean 作为总体真实偏置估计的不确定性
         se_mean = residual_std / np.sqrt(n_samples) if n_samples > 0 else 0.0
-        # 残差均值的置信区间：residual_mean ± z * SE_Mean
-        # 这与 ttest_1samp 的零假设检验在统计意义上一致
+        # 残差均值的置信区间：residual_mean ± z * SEM
+        # 如果区间不包含 0，则模型存在统计上显著的偏置
         bias_ci_lower = residual_mean - self.z_score * se_mean
         bias_ci_upper = residual_mean + self.z_score * se_mean
         bias_ci_width = bias_ci_upper - bias_ci_lower
-        # 残差均值的相对精度：CI 宽度越小、偏置越接近 0，该值越接近 1
-        # 具体公式：1 - (bias_ci_width / (abs(residual_mean) + bias_ci_width + 1e-8))
-        # 比旧版 1/(1+CI/MSE) 更灵数稳定，且不受 MSE 趋零的影响
+        # 偏置精度评分：综合 CI 宽度和偏置幅度，值越接近 1 表示偏置估计越可靠
+        # 公式: 1 - CI_width / (|mean_residual| + CI_width + ε)
         denom = abs(residual_mean) + bias_ci_width + 1e-8
         mean_residual_precision = float(1.0 - bias_ci_width / denom)
 
-        # 对残差做单样本 t 检验：零假设 H0 为 mean(residuals) == 0（即无系统性偏置）
+        # 对残差做单样本 t 检验：H0 = "残差均值为 0"（即无系统性偏置）
         if n_samples > 1 and residual_std > 0:
             _, p_value = stats.ttest_1samp(residuals, 0)
+            # p < 0.05 时拒绝 H0，认为存在显著偏置
             bias_significant = bool(p_value < 0.05)
         else:
+            # 样本量不足或残差无波动时，无法拒绝 H0
             p_value = 1.0
             bias_significant = False
 
+        # ── 预测区间宽度（模型在单次预测上的不确定性） ──
+        # 公式: 2 * z * σ_residual，表示约 95% 的预测误差落在此区间内
         prediction_interval_width = 2 * self.z_score * residual_std
 
-        # R² 在极端情况下可为非常大的负数（模型比直接用均值更差），
-        # 保留原始值的同时加一个 clip 后的版本
+        # ── R² 裁剪（防止下游处理遇到极端负值） ──
+        # R² 可为任意负数（模型劣于恒用均值），裁剪至 -1.0 后仍可用作比较
         r2_clipped = max(r2, -1.0)
         if r2 < -1.0:
             logger.warning(f"R² = {r2:.4f} is unusually low (clipped to -1.0), epoch={epoch}")
+
+        return {
+            # ── 基本信息 ──
+            "epoch": int(epoch),
+            "mode": mode,
+            "sample_size": int(n_samples),
+
+            # ── 核心误差指标 ──
+            "mse": float(mse),                # 均方误差
+            "rmse": rmse,                     # 均方根误差
+            "mae": mae,                       # 平均绝对误差
+            "r2": r2,                         # 原始决定系数（可能为负）
+            "r2_clipped": r2_clipped,         # 裁剪后决定系数（≥ -1.0）
+            "explained_variance": explained_variance,  # 解释方差
+
+            # ── 偏置分析（基于残差的均值） ──
+            "mean_residual": residual_mean,           # 残差均值（>0 = 低估偏置）
+            "mean_residual_ci": (float(bias_ci_lower), float(bias_ci_upper)),  # 置信区间
+            "mean_residual_precision": mean_residual_precision,  # 偏置精度评分 [0,1]
+            "bias_p_value": float(p_value),            # t 检验 p 值
+            "bias_significant": bias_significant,      # p < 0.05 时 True
+
+            # ── 预测区间 ──
+            "prediction_interval_width": float(prediction_interval_width),  # 单次预测不确定性
+        }
 
         return {
             # --- 基本信息 ---
