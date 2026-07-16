@@ -162,17 +162,29 @@ class RegressionMetrics:
 
 
 class ClassificationMetrics:
-    """Compute classification metrics from arrays."""
+    """分类指标计算器：汇总准确率、精确率、召回率、F1 和混淆矩阵。
+
+    用法:
+        config = EvaluationConfig(task_type="classification")
+        cm = ClassificationMetrics(config)
+        stats = cm.compute(y_true, y_pred, epoch=5)
+
+    返回的指标包含 macro 和 weighted 两种平均方式:
+        - macro: 对每个类等权平均（适合类别均衡场景）
+        - weighted: 按各类样本量加权平均（适合类别不均衡场景）
+    """
 
     def __init__(self, config: EvaluationConfig):
         self.config = config
 
     def compute(self, y_true: np.ndarray, y_pred: np.ndarray, epoch: int = 0) -> Dict[str, object]:
+        # ── 输入校验与标准化 ──
         y_true = np.asarray(y_true).reshape(-1)
         y_pred = np.asarray(y_pred).reshape(-1)
         if len(y_true) != len(y_pred):
-            raise ValueError("y_true and y_pred must have the same number of elements")
+            raise ValueError("y_true 和 y_pred 的样本数必须一致")
 
+        # ── 空数据保护：直接返回零值填充的字典 ──
         if len(y_true) == 0:
             return {
                 "epoch": int(epoch),
@@ -189,20 +201,33 @@ class ClassificationMetrics:
                 "num_classes": 0,
             }
 
+        # ── 标签编码：将原始标签（可能是字符串/非连续整数）映射为 [0, 1, ..., K-1] ──
+        # 合并所有真实和预测标签以获取完整的类别空间
         all_labels = np.unique(np.concatenate([y_true, y_pred]))
         label_to_idx = {label: idx for idx, label in enumerate(all_labels)}
         y_true_enc = np.array([label_to_idx[label] for label in y_true], dtype=int)
         y_pred_enc = np.array([label_to_idx[label] for label in y_pred], dtype=int)
 
+        # ── 全局分类指标 ──
+        # accuracy: 整体准确率 = 正确预测数 / 总样本数
         accuracy = float(accuracy_score(y_true_enc, y_pred_enc))
+
+        # macro 平均：先计算每个类各自的指标，再取算术平均
+        # 小类和大类有相同权重，适合类别均衡场景
         precision_macro = float(precision_score(y_true_enc, y_pred_enc, average="macro", zero_division=0))
         recall_macro = float(recall_score(y_true_enc, y_pred_enc, average="macro", zero_division=0))
         f1_macro = float(f1_score(y_true_enc, y_pred_enc, average="macro", zero_division=0))
+
+        # weighted 平均：按每个类的样本量加权平均
+        # 大类贡献更多，适合类别不均衡场景
         precision_weighted = float(precision_score(y_true_enc, y_pred_enc, average="weighted", zero_division=0))
         recall_weighted = float(recall_score(y_true_enc, y_pred_enc, average="weighted", zero_division=0))
         f1_weighted = float(f1_score(y_true_enc, y_pred_enc, average="weighted", zero_division=0))
+
+        # 混淆矩阵：cm[i][j] = 真实类别 i 中被预测为类别 j 的样本数
         cm = confusion_matrix(y_true_enc, y_pred_enc, labels=np.arange(len(all_labels)))
 
+        # ── 逐类准确率（用于识别哪些类别容易分错） ──
         class_accuracy = {}
         for class_idx in range(len(all_labels)):
             class_mask = y_true_enc == class_idx
@@ -210,19 +235,29 @@ class ClassificationMetrics:
                 class_correct = np.sum((y_true_enc == class_idx) & (y_pred_enc == class_idx))
                 class_accuracy[class_idx] = float(class_correct / np.sum(class_mask))
             else:
+                # 训练集中无此类的样本时，准确率记为 0
                 class_accuracy[class_idx] = 0.0
 
         return {
+            # ── 基本信息 ──
             "epoch": int(epoch),
-            "accuracy": accuracy,
-            "precision_macro": precision_macro,
-            "recall_macro": recall_macro,
-            "f1_macro": f1_macro,
-            "precision_weighted": precision_weighted,
-            "recall_weighted": recall_weighted,
-            "f1_weighted": f1_weighted,
-            "confusion_matrix": cm,
-            "class_accuracy": class_accuracy,
             "sample_size": int(len(y_true)),
             "num_classes": int(len(all_labels)),
+
+            # ── 整体准确率 ──
+            "accuracy": accuracy,                          # 总体正确预测比例
+
+            # ── Macro 平均（各类等权） ──
+            "precision_macro": precision_macro,            # 宏平均精确率
+            "recall_macro": recall_macro,                  # 宏平均召回率
+            "f1_macro": f1_macro,                          # 宏平均 F1
+
+            # ── Weighted 平均（按样本量加权） ──
+            "precision_weighted": precision_weighted,      # 加权平均精确率
+            "recall_weighted": recall_weighted,            # 加权平均召回率
+            "f1_weighted": f1_weighted,                    # 加权平均 F1
+
+            # ── 详细诊断信息 ──
+            "confusion_matrix": cm,                        # 混淆矩阵 K×K
+            "class_accuracy": class_accuracy,              # 每个类的独立准确率
         }
