@@ -10,9 +10,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from ann_project.evaluation.evaluation_framework import AnalysisMixin
 from ann_project.training.training_timer import TrainingTimer, TrainingTimeMetrics
-from ann_project.visualization.data_visualization import VisualMixin
 
 
 class TrainingConfigurator:
@@ -93,7 +91,7 @@ class ModelTrainer(TrainingTimer):
             self.start_backward()
             self.optimizer.zero_grad()
             loss = self.criterion(y_pred, target)
-            loss.sum().backward()
+            loss.backward()
             self.end_backward()
 
             self.start_optimization()

@@ -2,10 +2,12 @@
 
 from .core import DeviceManager, set_seed
 from .data import DataPreprocessor
-from .models import ANN, ModelManager, ModelTrainer, TrainingConfigurator
+from .models import ANN, BaseNeuralNetwork
+from .training import ModelManager, ModelTrainer, TrainingConfigurator
 
 __all__ = [
     "ANN",
+    "BaseNeuralNetwork",
     "DataPreprocessor",
     "DeviceManager",
     "ModelManager",
