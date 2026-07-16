@@ -162,6 +162,25 @@ class EvaluationEngine:
         """分类评估历史（只读）。"""
         return self.tracker.get_history("classification")
 
+    # ═════════════════════════════════════════════════════
+    # 便捷方法：单次评估（不经过缓存/历史）
+    # ═════════════════════════════════════════════════════
+
+    def compute_regression_statistics(
+        self, y_true, y_pred, mode: str = "train", epoch: int = 0
+    ) -> Dict[str, Any]:
+        """单次回归评估：直接计算指标，不经过缓存和历史积累。
+
+        适用于只需一次性评估、不在训练循环中使用的场景。
+        """
+        return self.regression_metrics.compute(y_true, y_pred, mode=mode, epoch=epoch)
+
+    def compute_classification_statistics(
+        self, y_true, y_pred, epoch: int = 0
+    ) -> Dict[str, Any]:
+        """单次分类评估：直接计算指标，不经过缓存和历史积累。"""
+        return self.classification_metrics.compute(y_true, y_pred, epoch=epoch)
+
     def clear_cache(self) -> None:
         """清空所有缓存（保留历史）。"""
         self.tracker.clear()
