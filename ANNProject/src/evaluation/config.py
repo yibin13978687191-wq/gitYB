@@ -19,7 +19,6 @@ class EvaluationConfig:
     task_type: str = "regression"
     confidence_level: float = 0.95
     output_format: str = "dict"
-    label_mapping: Optional[Dict[Any, int]] = None
 
     def __post_init__(self) -> None:
         self.task_type = str(self.task_type).strip().lower()
