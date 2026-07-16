@@ -31,9 +31,12 @@ class EvaluationConfig:
 
     @staticmethod
     def _normalize_output_format(output_format: Optional[str]) -> str:
+        # None 视为未指定，默认使用 "dict"
         if output_format is None:
             return "dict"
+        # 归一化：去首尾空白、转小写，避免大小写/空格差异
         normalized = str(output_format).strip().lower()
+        # 别名映射表：将多种常见写法映射为三种标准格式
         aliases = {
             "dict": "dict",
             "dictionary": "dict",

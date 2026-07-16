@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -24,6 +25,8 @@ from sklearn.metrics import (
     r2_score,
     recall_score,
 )
+
+logger = logging.getLogger(__name__)
 
 from .config import EvaluationConfig
 
@@ -46,37 +49,63 @@ class RegressionMetrics:
         r2 = float(r2_score(y_true, y_pred))
         explained_variance = float(explained_variance_score(y_true, y_pred))
 
-        residual_std = float(np.std(residuals, ddof=1)) if len(residuals) > 1 else 0.0
         n_samples = len(residuals)
-        se = residual_std / np.sqrt(n_samples) if n_samples > 0 else 0.0
-        ci_lower = mse - self.z_score * se
-        ci_upper = mse + self.z_score * se
-        ci_width = ci_upper - ci_lower
-        confidence_level_score = 1 / (1 + ci_width / mse) if mse > 0 else 1.0
+        residual_mean = float(np.mean(residuals))
+        # 样本标准差，ddof=1 用贝塞尔校正获得无偏估计
+        residual_std = float(np.std(residuals, ddof=1)) if n_samples > 1 else 0.0
+        # 残差均值的标准误（Standard Error of the Mean Residual），
+        # 描述 residual_mean 作为真实偏置估计的不确定性
+        se_mean = residual_std / np.sqrt(n_samples) if n_samples > 0 else 0.0
+        # 残差均值的置信区间：residual_mean ± z * SE_Mean
+        # 这与 ttest_1samp 的零假设检验在统计意义上一致
+        bias_ci_lower = residual_mean - self.z_score * se_mean
+        bias_ci_upper = residual_mean + self.z_score * se_mean
+        bias_ci_width = bias_ci_upper - bias_ci_lower
+        # 残差均值的相对精度：CI 宽度越小、偏置越接近 0，该值越接近 1
+        # 具体公式：1 - (bias_ci_width / (abs(residual_mean) + bias_ci_width + 1e-8))
+        # 比旧版 1/(1+CI/MSE) 更灵数稳定，且不受 MSE 趋零的影响
+        denom = abs(residual_mean) + bias_ci_width + 1e-8
+        mean_residual_precision = float(1.0 - bias_ci_width / denom)
 
+        # 对残差做单样本 t 检验：零假设 H0 为 mean(residuals) == 0（即无系统性偏置）
         if n_samples > 1 and residual_std > 0:
             _, p_value = stats.ttest_1samp(residuals, 0)
-            is_significant = bool(p_value < 0.05)
+            bias_significant = bool(p_value < 0.05)
         else:
             p_value = 1.0
-            is_significant = False
+            bias_significant = False
 
         prediction_interval_width = 2 * self.z_score * residual_std
 
+        # R² 在极端情况下可为非常大的负数（模型比直接用均值更差），
+        # 保留原始值的同时加一个 clip 后的版本
+        r2_clipped = max(r2, -1.0)
+        if r2 < -1.0:
+            logger.warning(f"R² = {r2:.4f} is unusually low (clipped to -1.0), epoch={epoch}")
+
         return {
+            # --- 基本信息 ---
             "epoch": int(epoch),
             "mode": mode,
+            "sample_size": int(n_samples),
+
+            # --- 核心误差指标 ---
             "mse": float(mse),
             "rmse": rmse,
             "mae": mae,
             "r2": r2,
+            "r2_clipped": r2_clipped,
             "explained_variance": explained_variance,
-            "confidence_level": float(np.clip(confidence_level_score, 0, 1)),
-            "significance_p_value": float(p_value),
-            "is_significant": is_significant,
+
+            # --- 偏置分析（基于残差的均值） ---
+            "mean_residual": residual_mean,
+            "mean_residual_ci": (float(bias_ci_lower), float(bias_ci_upper)),
+            "mean_residual_precision": mean_residual_precision,
+            "bias_p_value": float(p_value),
+            "bias_significant": bias_significant,
+
+            # --- 预测区间 ---
             "prediction_interval_width": float(prediction_interval_width),
-            "confidence_interval": (float(ci_lower), float(ci_upper)),
-            "sample_size": int(n_samples),
         }
 
 
