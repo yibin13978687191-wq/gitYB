@@ -220,7 +220,7 @@ class EvaluationReporter:
     # 统一入口
     # ─────────────────────────────────────────────────
 
-    def generate(
+    def render(
         self,
         history: List[Dict],
         task_type: Optional[str] = None,

@@ -167,16 +167,16 @@ class ANN(BaseNeuralNetwork):
 
     def record_predictions(self, y_true: torch.Tensor, y_pred: torch.Tensor, split: str = "train") -> None:
         if self._analyzer is not None:
-            self._analyzer.record_batch_predictions(y_true, y_pred, split)
+            self._analyzer.log_batch(y_true, y_pred, split)
 
     def get_statistics(self, epoch: int = 0, split: str = "val") -> Dict[str, Any]:
         if self._analyzer is not None:
-            return self._analyzer.compute_epoch_statistics(epoch=epoch, split=split)
+            return self._analyzer.eval_epoch(epoch=epoch, split=split)
         return {}
 
     def get_analysis_report(self, output_format: str = "dict") -> Any:
         if self._analyzer is not None:
-            return self._analyzer.generate_report(output_format)
+            return self._analyzer.report(output_format)
         return {}
 
     def record_training_step(self, training_data: Optional[Dict[str, Any]]) -> None:

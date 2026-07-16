@@ -28,11 +28,11 @@ class EvaluationEngine:
     用法:
         engine = EvaluationEngine(config)
         # 训练循环中记录 batch
-        engine.record_batch_predictions(y_true, y_pred, split="train")
+        engine.log_batch(y_true, y_pred, split="train")
         # epoch 结尾计算统计
-        stats = engine.compute_epoch_statistics(epoch=1, split="train")
+        stats = engine.eval_epoch(epoch=1, split="train")
         # 训练结束后生成报告
-        report = engine.generate_report(output_format="dict")
+        report = engine.report(output_format="dict")
     """
 
     def __init__(self, config: Optional[EvaluationConfig] = None):
@@ -61,7 +61,7 @@ class EvaluationEngine:
     # Batch 级别：记录预测
     # ═════════════════════════════════════════════════════
 
-    def record_batch_predictions(
+    def log_batch(
         self, y_true: torch.Tensor, y_pred: torch.Tensor, split: str = "train"
     ) -> None:
         """记录一个 batch 的预测结果，存入 tracker 缓存。
@@ -87,7 +87,7 @@ class EvaluationEngine:
     # Epoch 级别：合并缓存 → 计算 → 追加历史
     # ═════════════════════════════════════════════════════
 
-    def compute_epoch_statistics(
+    def eval_epoch(
         self, epoch: int = 0, split: str = "val"
     ) -> Dict[str, Any]:
         """合并指定 split 的所有 batch 预测，计算 epoch 统计并追加历史。
@@ -130,7 +130,7 @@ class EvaluationEngine:
     # 报告生成
     # ═════════════════════════════════════════════════════
 
-    def generate_report(
+    def report(
         self, output_format: Optional[str] = None
     ) -> Union[Dict[str, Any], str, pd.DataFrame]:
         """生成评估报告。
@@ -142,11 +142,11 @@ class EvaluationEngine:
         Returns:
             对应格式的评估结果。
         """
-        fmt = self.config._normalize_output_format(
+        fmt = self.config.normalize_output_format(
             output_format or self.config.output_format
         )
         history = self.tracker.get_history(self.config.task_type)
-        return self.reporter.generate(history, self.config.task_type, fmt)
+        return self.reporter.render(history, self.config.task_type, fmt)
 
     # ═════════════════════════════════════════════════════
     # 历史与缓存管理
@@ -166,7 +166,7 @@ class EvaluationEngine:
     # 便捷方法：单次评估（不经过缓存/历史）
     # ═════════════════════════════════════════════════════
 
-    def compute_regression_statistics(
+    def eval_regression(
         self, y_true, y_pred, mode: str = "train", epoch: int = 0
     ) -> Dict[str, Any]:
         """单次回归评估：直接计算指标，不经过缓存和历史积累。
@@ -175,12 +175,12 @@ class EvaluationEngine:
         """
         return self.regression_metrics.compute(y_true, y_pred, mode=mode, epoch=epoch)
 
-    def compute_classification_statistics(
+    def eval_classification(
         self, y_true, y_pred, epoch: int = 0
     ) -> Dict[str, Any]:
         """单次分类评估：直接计算指标，不经过缓存和历史积累。"""
         return self.classification_metrics.compute(y_true, y_pred, epoch=epoch)
 
-    def clear_cache(self) -> None:
+    def reset(self) -> None:
         """清空所有缓存（保留历史）。"""
         self.tracker.clear()

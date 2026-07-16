@@ -26,10 +26,10 @@ class EvaluationConfig:
             raise ValueError("task_type must be 'regression' or 'classification'")
         if not 0 < self.confidence_level < 1:
             raise ValueError("confidence_level must be in the open interval (0, 1)")
-        self.output_format = self._normalize_output_format(self.output_format)
+        self.output_format = self.normalize_output_format(self.output_format)
 
     @staticmethod
-    def _normalize_output_format(output_format: Optional[str]) -> str:
+    def normalize_output_format(output_format: Optional[str]) -> str:
         # None 视为未指定，默认使用 "dict"
         if output_format is None:
             return "dict"
