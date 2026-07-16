@@ -135,31 +135,6 @@ class RegressionMetrics:
             "prediction_interval_width": float(prediction_interval_width),  # 单次预测不确定性
         }
 
-        return {
-            # --- 基本信息 ---
-            "epoch": int(epoch),
-            "mode": mode,
-            "sample_size": int(n_samples),
-
-            # --- 核心误差指标 ---
-            "mse": float(mse),
-            "rmse": rmse,
-            "mae": mae,
-            "r2": r2,
-            "r2_clipped": r2_clipped,
-            "explained_variance": explained_variance,
-
-            # --- 偏置分析（基于残差的均值） ---
-            "mean_residual": residual_mean,
-            "mean_residual_ci": (float(bias_ci_lower), float(bias_ci_upper)),
-            "mean_residual_precision": mean_residual_precision,
-            "bias_p_value": float(p_value),
-            "bias_significant": bias_significant,
-
-            # --- 预测区间 ---
-            "prediction_interval_width": float(prediction_interval_width),
-        }
-
 
 class ClassificationMetrics:
     """分类指标计算器：汇总准确率、精确率、召回率、F1 和混淆矩阵。
