@@ -23,7 +23,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 class ANN(BaseNeuralNetwork):
     """全连接前馈神经网络（BP / MLP），支持回归与分类。
 
-    通过组合方式接入评估引擎（NeuralNetworkAnalyzer）和
+    通过组合方式接入评估引擎（EvaluationEngine）和
     可视化模块（NeuralNetworkVisualizer），而非通过多重继承混入。
     """
 
@@ -150,8 +150,9 @@ class ANN(BaseNeuralNetwork):
 
     def _init_analyzer(self, task_type: str) -> None:
         """初始化评估分析引擎。"""
-        from ann_project.evaluation.evaluation_framework import NeuralNetworkAnalyzer
-        self._analyzer = NeuralNetworkAnalyzer(task_type=task_type)
+        from ann_project.evaluation import EvaluationConfig, EvaluationEngine
+        config = EvaluationConfig(task_type=task_type)
+        self._analyzer = EvaluationEngine(config=config)
 
     def _init_visualizer(self, task_type: str) -> None:
         """初始化可视化引擎。"""

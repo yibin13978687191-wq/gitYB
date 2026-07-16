@@ -7,6 +7,9 @@
 迁移方向:
     新代码建议直接使用 EvaluationEngine + BaseNeuralNetwork 的组合方式。
     这个模块是为重构过渡期保留的兼容层，后续可逐步弃用。
+    新代码请直接使用 ann_project.evaluation.EvaluationEngine。
+
+Deprecated: 本模块仅用于向后兼容，不再被项目内部导入。
 """
 
 from __future__ import annotations
